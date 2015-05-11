@@ -1,0 +1,54 @@
+package edu.upenn.cis.cis455.webserver;
+import java.util.Enumeration;
+
+import static org.junit.Assert.*;
+import org.junit.Before;
+import org.junit.Test;
+
+public class Context_Test_Cases {
+
+	Context context;
+	Context context_alt;
+
+	@Before
+	public void initialize() {
+		context = new Context("Test Cases for Context");
+		context_alt = new Context();
+	}
+
+	@Test
+	public void test_getServletContextName() {
+		assertEquals("Test Cases for Context", context.getServletContextName()); //Test the functionality of getServletContextName()
+		assertNull(context_alt.getServletContextName()); //getServletContext() should return null when it is not passed a context name as a constructor argument
+	}
+
+	@Test
+	public void test_setInitParam_getInitParameter_getInitParameterNames() {
+		context.setInitParam("test_param1", "test_value1"); //Test the functionality of setInitParam()
+		context.setInitParam("test_param2", "test_value2");
+		context.setInitParam("test_param3", "test_value3");
+		assertEquals("test_value1", context.getInitParameter("test_param1")); //Test the functionality of getInitParameter()
+		assertNull(context.getInitParameter("non_existing_param")); //getInitParameter should return null for init-params that do not exist
+		Enumeration a = context.getInitParameterNames(); //Test the functionality of getInitParameterNames()
+		while(a.hasMoreElements()){
+			String param = (String) a.nextElement();
+			assertTrue(param.equals("test_param1") || param.equals("test_param2") || param.equals("test_param3"));
+		}
+	}
+
+	@Test
+	public void test_setAttribute_getAttribute_getAttributeNames() {
+		context.setAttribute("test_attr1", new String("test_obj1")); //Test the functionality of setAttribute()
+		context.setAttribute("test_attr2", new String("test_obj2"));
+		context.setAttribute("test_attr3", new String("test_obj3"));
+		assertEquals(new String("test_obj1"), context.getAttribute("test_attr1")); //Test the functionality of getAttribute()
+		context.removeAttribute("test_attr3"); //Test the functionality of removeAttribute()
+		assertNull(context.getAttribute("test_attr3")); //Since we removed the attribute, getAttribute should return a null
+		Enumeration a = context.getAttributeNames(); //Test the functionality of getAttributeNames
+		while(a.hasMoreElements()){
+			String param = (String) a.nextElement();
+			assertTrue(param.equals("test_attr1") || param.equals("test_attr2"));
+		}
+	}
+	
+}

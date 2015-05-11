@@ -1,0 +1,43 @@
+package edu.upenn.cis.cis455.webserver;
+import java.util.Enumeration;
+
+import static org.junit.Assert.*;
+import org.junit.Before;
+import org.junit.Test;
+
+public class Config_Test_Cases {
+
+	Config config;
+	Context context;
+
+	@Before
+	public void initialize() {
+		context = new Context();
+		config = new Config("test_servlet", context);
+	}
+
+	@Test
+	public void test_getServletName() {
+		assertEquals("test_servlet", config.getServletName()); //Test the functionality of getServletName()
+	}
+
+	@Test
+	public void test_getServletContext() {
+		assertEquals(context, config.getServletContext()); //Test the functionality of getServletContext()
+	}
+
+	@Test
+	public void test_setInitParam_getInitParameter_getInitParameterNames() {
+		context.setInitParam("test_param1", "test_value1"); //Test the functionality of setInitParam()
+		context.setInitParam("test_param2", "test_value2");
+		context.setInitParam("test_param3", "test_value3");
+		assertEquals("test_value1", context.getInitParameter("test_param1")); //Test the functionality of getInitParameter()
+		assertNull(context.getInitParameter("non_existing_param")); //getInitParameter should return null for init-params that do not exist
+		Enumeration a = context.getInitParameterNames(); //Test the functionality of getInitParameterNames()
+		while(a.hasMoreElements()){
+			String param = (String) a.nextElement();
+			assertTrue(param.equals("test_param1") || param.equals("test_param2") || param.equals("test_param3"));
+		}
+	}
+	
+}

@@ -1,0 +1,82 @@
+package edu.upenn.cis.cis455.webserver;
+import java.io.IOException;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.util.AbstractMap;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map.Entry;
+
+import static org.junit.Assert.*;
+
+import org.junit.Before;
+import org.junit.Test;
+
+import com.sun.xml.internal.fastinfoset.util.StringArray;
+
+public class Request_Test_Cases {
+
+	Context context;
+	Session session;
+	Response response;
+	Socket clientSocket;
+	HashMap<String, String> hm;
+	Entry<String, String> entry;
+	String session_id;
+	long last_accessed_time;
+	Request request;
+	static boolean first_time = true;
+
+	@Before
+	public void initialize() throws Exception {
+		context = new Context();
+		last_accessed_time = new Date().getTime();
+		session = null;
+		response = new Response();
+		hm = new HashMap<String,String>();
+		String[] arguments = new String[3];
+		arguments[0] = "8080";
+		arguments[1] = "/home/cis455/Desktop/dir1/dir2/dir3/root";
+		arguments[2] = "/home/cis455/workspace/HW1/src/edu/upenn/cis/cis455/WEB-INF/web.xml";
+		entry = new AbstractMap.SimpleEntry<String, String>("/test", "TestServlet");
+		if (first_time) { 
+			HttpServer.main(arguments);
+			first_time = false;
+		}
+		clientSocket = new Socket("localhost", 8080);
+		request = new Request(context, session, response, clientSocket, hm, entry);
+	}
+
+	@Test
+	public void test_getHeader() {
+		hm.put("test", "test1 , test2");
+		assertEquals(new String("test1"), request.getHeader("test")); //Test the functionality of getHeader. It should return only the first value in case of a multivalued header.
+	}
+	
+	@Test
+	public void test_getHeaders() {
+		hm.put("test", "test");
+		assertEquals("test", request.getHeaderNames().nextElement());
+	}
+	
+	@Test
+	public void test_getQueryPath() {
+		request.url = "/calculate";
+		hm.put("path", "/calculate?num1=10&num2=20");
+		assertEquals("num1=10&num2=20", request.getQueryString());
+	}
+	
+	@Test
+	public void test_getRequestURI() {
+		hm.put("path", "http://localhost:8080/calculate/path/to/servlet?num1=10&num2=20");
+		assertEquals("calculate/path/to/servlet", request.getRequestURI());
+	}
+	
+	@Test
+	public void test_getRequestURL() {
+		hm.put("path", "http://localhost:8080/calculate/path/to/servlet?num1=10&num2=20");
+		assertEquals("http://localhost:8080/calculate/path/to/servlet?num1=10&num2=20", request.getRequestURL().toString());
+	}
+	
+}

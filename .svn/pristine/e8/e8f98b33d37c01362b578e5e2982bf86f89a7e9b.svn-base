@@ -1,0 +1,68 @@
+package edu.upenn.cis.cis455.webserver;
+import java.io.*;
+import java.util.*;
+import java.net.*;
+
+public class HttpServer {
+  
+  public static void main(String args[])
+  {
+	  if (args.length == 0)
+	  {
+		  System.out.println("Kaushik Yasaswy Suryanarayana\nkaus\n");
+		  System.exit(0);
+	  }
+	  int port = Integer.parseInt(args[0]);
+	  String directory = args[1];
+	  Server server = new Server(port, directory);
+  }
+  
+}
+
+class Server extends Thread {
+	
+	private int port = 80;
+	private String directory;
+	public static boolean alive = true;
+	private Queue<Socket> Q = new LinkedList<Socket>();
+	private ServerSocket serverSocket;
+
+	public Server(int port, String directory)
+	{
+		this.port = port;
+		this.directory = directory;
+		Handler handler = new Handler(Q);
+		ArrayList<Thread> threadpool = new ArrayList<Thread>();
+		for(int i=0;i<10;i++) {
+			Thread handlerThread = new Thread(handler);
+			threadpool.add(handlerThread);
+		}
+		for (Thread t : threadpool) {
+			t.start();
+		}
+		try {
+			serverSocket = new ServerSocket(port);
+			this.start();
+		}
+		catch(IOException e) {
+			e.printStackTrace();
+		}
+		
+	}
+	
+	public void run() {
+		while(alive) {
+			Socket clientSocket;
+			try {
+				clientSocket = serverSocket.accept();
+				synchronized(Q) {
+					Q.add(clientSocket);
+					Q.notifyAll();
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+	
+}

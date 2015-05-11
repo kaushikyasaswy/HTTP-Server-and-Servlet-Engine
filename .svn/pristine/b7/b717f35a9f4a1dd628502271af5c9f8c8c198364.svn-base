@@ -1,0 +1,22 @@
+package edu.upenn.cis.cis455.webserver;
+
+
+import javax.servlet.*;
+import javax.servlet.http.*;
+import java.io.*;
+
+public class Session_Servlet3 extends HttpServlet {
+	protected void doGet(HttpServletRequest request,
+			HttpServletResponse response) throws ServletException, IOException {
+		HttpSession session = request.getSession(false);
+		response.setContentType("text/html");
+		PrintWriter out = response.getWriter();
+		out.write("<HTML><HEAD><TITLE>Session Servlet 1</TITLE></HEAD><BODY>");
+		if (session == null) {
+			out.write("<P>Session successfully invalidated.</P>");
+		} else {
+			out.write("<P>Uh-oh, session still exists!</P>");
+		}
+		out.write("</BODY></HTML>");		
+	}
+}

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<!DOCTYPE web-app
+    PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN"
+    "http://java.sun.com/dtd/web-app_2_3.dtd">
+
+<web-app>
+
+
+	<!-- General description of your web application -->
+
+	<display-name>Test servlets</display-name>
+	<description>
+		Some servlets you can use to test your application server
+    </description>
+
+	<context-param>
+		<param-name>webmaster</param-name>
+		<param-value>yourname@seas.upenn.edu</param-value>
+		<description>
+			The EMAIL address of the administrator to whom questions
+			and comments about this application should be addressed.
+      </description>
+	</context-param>
+
+	<servlet>
+		<servlet-name>testContext</servlet-name>
+		<servlet-class>servlets.ContextTestServlet</servlet-class>
+	</servlet>
+
+	<servlet>
+		<servlet-name>init</servlet-name>
+		<description>
+			This servlet checks for the context init parameter
+			"webmaster" from
+			above, and the servlet init parameter "TestParam"
+			from below.
+      </description>
+		<servlet-class>servlets.InitParamServlet</servlet-class>
+		<init-param>
+			<param-name>TestParam</param-name>
+			<param-value>1776</param-value>
+		</init-param>
+	</servlet>
+
+	<servlet>
+		<servlet-name>testConfig</servlet-name>
+		<servlet-class>edu.upenn.cis.cis455.ConfigTestServlet</servlet-class>
+		<init-param>
+			<param-name>TestParam</param-name>
+			<param-value>1776</param-value>
+		</init-param>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>testConfig</servlet-name>
+		<url-pattern>/HW1/testConfig</url-pattern>
+	</servlet-mapping>
+
+	<servlet-mapping>
+		<servlet-name>testContext</servlet-name>
+		<url-pattern>/testContext</url-pattern>
+	</servlet-mapping>
+
+	<!--
+		Define the default session timeout for your application, in minutes.
+		From a servlet or JSP page, you can modify the timeout for a
+		particular session dynamically by using
+		HttpSession.getMaxInactiveInterval().
+	-->
+
+	<session-config>
+		<session-timeout>30</session-timeout>    <!-- 30 minutes -->
+	</session-config>
+
+</web-app>

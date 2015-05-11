@@ -1,0 +1,408 @@
+package edu.upenn.cis.cis455.webserver;
+import java.io.*;
+import java.net.*;
+import java.nio.*;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.text.*;
+import java.util.*;
+
+public class Handler implements Runnable {
+
+	private final Queue<Socket> Q;
+	private HashMap<String,String> thread_request_map = new HashMap<String,String>();
+	public enum methods {GET, HEAD, DEFAULT};
+
+	public Handler(Queue<Socket> Q) {
+		this.Q = Q;
+	}
+
+	public void generate_response(HashMap<String,String> hm, Socket clientSocket) throws IOException {
+
+		DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
+		methods method;
+		try {
+			method = methods.valueOf(hm.get("Method"));
+		}
+		catch (IllegalArgumentException e) {
+			method = methods.valueOf("DEFAULT");
+		}
+		String header = null;
+		String content = null;
+		int content_length = 0;
+		//Compute the date and time to place in the response header
+		Date d = Calendar.getInstance().getTime();
+		SimpleDateFormat format = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.US);
+		format.setTimeZone(TimeZone.getTimeZone("GMT"));
+		String date = format.format(d);
+		
+		//Error 400: Bad Request - When the version is 1.1 but does not contain a Host field
+		if(hm.get("Version").toString().equals(new String("HTTP/1.1")) && !hm.containsKey("Host")) {
+			content_length = 111; //Computed based on the html code for error message underneath
+			header = hm.get("Version") + " 400 Bad Request\r\n";
+			header += "Content-Type: text/html\r\n";
+			header += "Content-Length: " + content_length + "\r\n";
+			header += "Connection: close\r\n";
+			header += "\r\n";
+			content = "<html><body>\n<h1>No Host: header received</h1>\nHTTP 1.1 requests must include the Host: header.\n</body></html>";
+			out.write(header.getBytes());
+			out.write(content.getBytes());
+			out.flush();
+			out.close();
+			return;
+		}
+
+		if (hm.containsKey("Host"))
+			thread_request_map.put(Thread.currentThread().getName(),hm.get("Host").toString()+hm.get("Path").toString());
+		else
+			thread_request_map.put(Thread.currentThread().getName(),hm.get("Path").toString());
+			
+		//Inspect the method in the request header
+		switch (method) {
+
+		case GET:
+
+			//If the request is for the control page
+			if (hm.get("Path").equals(new String("/control"))) {
+				content = "<html><body>\n<h1 style=\"text-align:center\">Control Panel</h1>\n<hr>\nFull Name: Kaushik Yasaswy Suryanarayana<br>SEAS Login: kaus\n<hr>\n";
+				content += "<table cellspacing = \"20\"><tr><th>Thread</th><th>Status</th></tr>";
+				for(Thread t : Server.threadpool) {
+					content += "<tr><td align=\"center\">" + t.getName() + "</td><td align=\"center\">";
+					if (t.getState() == Thread.State.RUNNABLE) { 
+						content += thread_request_map.get(t.getName()); //Get the URL the thread is servicing
+					}
+					else
+						content += t.getState().toString(); //Get the state of the thread otherwise
+					content += "</td></tr>";
+				}
+				content += "</table><hr><button type=\"button\" onclick=\"location.href='http://" + hm.get("Host") + "/shutdown'\">Shutdown Server</button>";
+				content += "</body></html>";
+				byte[] b = content.getBytes();
+				content_length = b.length;
+				header = hm.get("Version") + " 200 OK\r\n";
+				header += "Content-Type: text/html\r\n";
+				header += "Content-Length: " + content_length + "\r\n";
+				header += "Connection: close\r\n";
+				header += "\r\n";
+				out.write(header.getBytes());
+				out.write(b);
+				out.close();
+				return;	
+			}
+			//If the request is for the shutdown page
+			if (hm.get("Path").equals(new String("/shutdown"))) {
+				Server.alive = false;
+				Server.serverSocket.close();
+				content = "<html><body>\n<h1 style=\"text-align:center\">The Server is going to shutdown now. Goodbye!</h1>";
+				content += "</body></html>";
+				content_length = content.getBytes().length;
+				header = hm.get("Version") + " 200 OK\r\n";
+				header += "Content-Type: text/html\r\n";
+				header += "Content-Length: " + content_length + "\r\n";
+				header += "Connection: close\r\n";
+				header += "\r\n";
+				out.write(header.getBytes());
+				out.write(content.getBytes());
+				out.flush();
+				out.close();
+				return;	
+			}
+			String filepath = Server.directory + hm.get("Path");
+			File f = new File(filepath);
+			if(!f.exists()) {
+				content_length = 57; //Computed based on the html code for error message
+				header = hm.get("Version") + " 404 Not Found\r\n";
+				header += "Date: " + date + "\r\n";
+				header += "Content-Type: text/html\r\n";
+				header += "Content-Length: " + content_length + "\r\n";
+				header += "Connection: close\r\n";
+				header += "\r\n";
+				content = "<html><body>\n<h1>404: File Not Found</h1>\n</body></html>";
+				out.write(header.getBytes());
+				out.write(content.getBytes());
+				out.flush();
+				out.close();
+				return;
+			}
+			if(!f.canRead()) {
+				content_length = 59; //Computed based on the html code for error message
+				header = hm.get("Version") + " 403 Forbidden\r\n";
+				header += "Date: " + date + "\r\n";
+				header += "Content-Type: text/html\r\n";
+				header += "Content-Length: " + content_length + "\r\n";
+				header += "Connection: close\r\n";
+				header += "\r\n";
+				content = "<html><body>\n<h1>403: Forbidden Access</h1>\n</body></html>";
+				out.write(header.getBytes());
+				out.write(content.getBytes());
+				out.flush();
+				out.close();
+				return;
+			}
+			header = hm.get("Version") + " 200 OK\r\n";
+			header += "Date: " + date + "\r\n";
+			if(f.isDirectory()) {
+				header += "Content-Type: text/html\r\n";
+				File[] contents = f.listFiles();
+				String page_content = "<html>\n<body bgcolor=\"Snow\">\n<h1 style=\"text-align:center\"><b>\"JerryMouse\" Server</b></h1><hr>\n<h2>Contents  of  <a href=\"http://" + hm.get("Host") + "/\">ROOT</a> / ";
+				String links[] = hm.get("Path").split("/");
+				for (int i=2; i<links.length+1; i++) {
+					String href = hm.get("Host");
+					for (int j = 1; j<i; j++) {
+						href += "/" + links[j];
+					}
+					page_content += "<a href=\"http://" + href + "\">" + links[i-1] + "</a> / ";
+				}
+				page_content += "</h2>\n<table cellspacing=\"30\"><tr><th>Name</th><th>Type</th><th>Size</th><th>Last Modified</th></tr>";
+				for(File s: contents) {
+					int l = Server.directory.length();
+					String abs = s.getAbsolutePath();
+					String relative_path = abs.substring(l, abs.length());
+					page_content += "<tr><td><a href=\"http://";
+					page_content += hm.get("Host") + relative_path;
+					page_content += "\">" + s.getName() + "</a></td><td>";
+					if (s.isDirectory())
+						page_content += "Sub-Directory</td><td>N/A</td><td>";
+					else {
+						if (s.getName().endsWith("jpeg") || s.getName().endsWith("jpg") || s.getName().endsWith("gif") || s.getName().endsWith("png"))
+							page_content += "Image</td><td>";
+						else if (s.getName().endsWith("html"))
+							page_content += "HTML File</td><td>";
+						else if (s.getName().endsWith("txt"))
+							page_content += "Text File</td><td>";
+						else
+							page_content += "Unknown</td><td>";
+						FileInputStream fis = new FileInputStream(s.getAbsolutePath());
+						page_content += fis.available() + " B</td><td>";
+						fis.close();
+					}
+					SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+					page_content += sdf.format(s.lastModified()) + "</td></tr>";
+				}
+				page_content += "</table></body></html>";
+				content_length = page_content.length();
+				header += "Content-Length: " + content_length + "\r\n";
+				header += "Connection: close\r\n";
+				header += "\r\n";
+				out.write(header.getBytes());
+				out.write(page_content.getBytes());
+				out.flush();
+				out.close();
+				return;
+			}
+			if(f.isFile()) {
+				FileInputStream fis = new FileInputStream(filepath);
+				if(filepath.endsWith("html")) {
+					header += "Content-Type: text/html\r\n";
+				}
+				else if(filepath.endsWith("txt")) {
+					header += "Content-Type: text/plain\r\n";
+				}
+				else if(filepath.endsWith("jpg")) {
+					header += "Content-Type: image/jpg\r\n";
+				}
+				else if(filepath.endsWith("jpeg")) {
+					header += "Content-Type: image/jpeg\r\n";
+				}
+				else if(filepath.endsWith("gif")) {
+					header += "Content-Type: image/gif\r\n";
+				}
+				else if(filepath.endsWith("png")) {
+					header += "Content-Type: image/png\r\n";
+				}
+				else {
+					header += "Content-Type: application/octet-stream\r\n";
+				}
+				content_length = fis.available();
+				byte[] b = new byte[content_length];
+				fis.read(b);
+				header += "Content-Length: " + content_length + "\r\n";
+				header += "Connection: close\r\n";
+				header += "\r\n";
+				out.write(header.getBytes());
+				out.write(b);
+				out.flush();
+				fis.close();
+				out.close();
+				return;
+			}
+
+		case HEAD: //Header changes to Connection close and \r\n missing
+
+			String filepath1 = Server.directory + hm.get("Path");
+			File f1 = new File(filepath1);
+			if(!f1.exists()) {
+				content_length = 57; //Computed based on the html code for error message
+				header = hm.get("Version") + " 404 Not Found\r\n";
+				header += "Date: " + date + "\r\n";
+				header += "Content-Type: text/html\r\n";
+				header += "Content-Length: " + content_length + "\r\n";
+				header += "\n";
+				out.write(header.getBytes());
+				out.close();
+				return;
+			}
+			if(!f1.canRead()) {
+				content_length = 59; //Computed based on the html code for error message
+				header = hm.get("Version") + " 403 Forbidden\r\n";
+				header += "Date: " + date + "\r\n";
+				header += "Content-Type: text/html\r\n";
+				header += "Content-Length: " + content_length + "\r\n";
+				header += "\n";
+				out.write(header.getBytes());
+				out.close();
+				return;
+			}
+			header = hm.get("Version") + " 200 OK\r\n";
+			header += "Date: " + date + "\r\n";
+			if(f1.isDirectory()) {
+				header += "Content-Type: text/html\r\n";
+				File[] contents = f1.listFiles();
+				String page_content = "<html>\n<body>\n<h1 style=\"text-align:center\"><b>\"JerryMouse\" Server</b></h1><hr>\n<p>Contents  of  <a href=\"http://" + hm.get("Host") + "/\">ROOT</a> / ";
+				String links[] = hm.get("Path").split("/");
+				for (int i=2; i<links.length+1; i++) {
+					String href = hm.get("Host");
+					for (int j = 1; j<i; j++) {
+						href += "/" + links[j];
+					}
+					page_content += "<a href=\"http://" + href + "\">" + links[i-1] + "</a> / ";
+				}
+				page_content += "</p>\n<table cellspacing=\"30\"><tr><th>Name</th><th>Type</th><th>Size</th><th>Last Modified</th></tr>";
+				for(File s: contents) {
+					int l = Server.directory.length();
+					String abs = s.getAbsolutePath();
+					String relative_path = abs.substring(l, abs.length());
+					page_content += "<tr><td><a href=\"http://";
+					page_content += hm.get("Host") + relative_path;
+					page_content += "\">" + s.getName() + "</a></td><td>";
+					if (s.isDirectory())
+						page_content += "Sub-Directory</td><td>N/A</td><td>";
+					else {
+						if (s.getName().endsWith("jpeg") || s.getName().endsWith("jpg") || s.getName().endsWith("gif") || s.getName().endsWith("png"))
+							page_content += "Image</td><td>";
+						else if (s.getName().endsWith("html"))
+							page_content += "HTML File</td><td>";
+						else if (s.getName().endsWith("txt"))
+							page_content += "Text File</td><td>";
+						else
+							page_content += "Unknown</td><td>";
+						FileInputStream fis = new FileInputStream(s.getAbsolutePath());
+						page_content += fis.available() + " B</td><td>";
+						fis.close();
+					}
+					SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+					page_content += sdf.format(s.lastModified()) + "</td></tr>";
+				}
+				page_content += "</table></body></html>";
+				content_length = page_content.length();
+				header += "Content-Length: " + content_length + "\r\n";
+				header += "\n";
+				out.write(header.getBytes());
+				out.close();
+				return;
+			}
+			if(f1.isFile()) {
+				FileInputStream fis = new FileInputStream(filepath1);
+				if(filepath1.endsWith("html")) {
+					header += "Content-Type: text/html\r\n";
+				}
+				if(filepath1.endsWith("txt")) {
+					header += "Content-Type: text/plain\r\n";
+				}
+				if(filepath1.endsWith("jpg")) {
+					header += "Content-Type: image/jpg\r\n";
+				}
+				if(filepath1.endsWith("jpeg")) {
+					header += "Content-Type: image/jpeg\r\n";
+				}
+				if(filepath1.endsWith("gif")) {
+					header += "Content-Type: image/gif\r\n";
+				}
+				if(filepath1.endsWith("png")) {
+					header += "Content-Type: image/png\r\n";
+				}
+				content_length = fis.available();
+				header += "Content-Length: " + content_length + "\r\n";
+				header += "\n";
+				out.write(header.getBytes());
+				fis.close();
+				out.close();
+			}
+		case DEFAULT:
+			
+			header = hm.get("Version") + " 405 Method Not Allowed\r\n";
+			header += "Date: " + date + "\r\n";
+			header += "Content-Type: text/html\r\n";
+			header += "Content-Length: " + content_length + "\r\n";
+			header += "Connection: close\r\n";
+			header += "\r\n";
+			content = "<html><body>\n<h1>405: Method Not Allowed</h1>\n</body></html>";
+			content_length = content.getBytes().length;
+			out.write(header.getBytes());
+			out.write(content.getBytes());
+			out.flush();
+			out.close();
+			return;
+
+		}
+
+	}
+
+	//Validating the path
+	public String simplify_path(String s) { 
+		s = s.replace("%20"," ");
+		Path p = Paths.get(s);
+		s = p.normalize().toString();
+		//String directory_parts[] = Server.directory.split("/");
+		//String home = directory_parts[directory_parts.length-1];
+		//s = s.split("/"+home+"/")[1];
+		return s;
+	}
+
+	public void run() {
+		while(Server.alive) {
+			HashMap<String,String> hm = new HashMap<String,String>();
+			String request = "";
+			String[] request_parts;
+			synchronized(Q) {
+				while(Q.isEmpty()) {
+					try {
+						if(Server.alive == false)
+							break;
+						Q.wait();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					} 
+				}
+				if(Server.alive == false)
+					break;
+				Socket clientSocket = Q.remove();
+				try {
+					BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+					request = in.readLine();
+					if (request == null)
+						continue;
+					request_parts = request.split(" ");
+					hm.put("Method", request_parts[0]);
+					hm.put("Path", simplify_path(request_parts[1]));
+					hm.put("Version", request_parts[2]);
+					while(true) {
+						request = in.readLine();
+						if (request.length() == 0)
+							break;
+						request_parts = request.split(": ");
+						hm.put(request_parts[0], request_parts[1]);
+					}
+					generate_response(hm, clientSocket);
+					//thread_request_map.remove(Thread.currentThread().getName());
+					in.close();
+					clientSocket.close();
+				}
+				catch(Exception e) {
+					e.printStackTrace();
+				}
+				Q.notifyAll();
+			}
+		}
+	}
+}

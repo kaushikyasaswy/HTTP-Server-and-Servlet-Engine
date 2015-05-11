@@ -1,0 +1,24 @@
+package edu.upenn.cis.cis455.webserver;
+import java.io.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class CreateUname extends HttpServlet {  
+  
+	public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException{  
+
+        response.setContentType("text/html");  
+        PrintWriter out = response.getWriter();  
+          
+        String un = request.getParameter("uName");  
+        out.write("Welcome "+ un);  
+          
+        HttpSession session=request.getSession();  
+        session.setAttribute("uname",un);  
+  
+        out.write("You made a username");  
+        //http://localhost:8080/Calculator/CreateUname?uName=stuwags
+                    
+    }  
+  
+}  

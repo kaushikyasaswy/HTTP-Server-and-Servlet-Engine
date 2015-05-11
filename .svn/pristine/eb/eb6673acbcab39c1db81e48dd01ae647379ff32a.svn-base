@@ -1,0 +1,18 @@
+package edu.upenn.cis.cis455.webserver;
+import java.io.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class Parameters extends HttpServlet {
+  public void doGet(HttpServletRequest request, HttpServletResponse response) 
+       throws java.io.IOException
+  {
+    response.setContentType("text/html");
+    PrintWriter out = response.getWriter();
+    String v1 = request.getParameter("num1");
+    String v2 = request.getParameter("num2");
+    out.write("<html><head><title>Parameters</title></head>");
+    out.write("<body>"+v1+"and"+v2+"="+(v1+v2)+"</body></html>");
+    //http://localhost:8080/Calculator/Param?num1=test&num2=4
+  }
+}
